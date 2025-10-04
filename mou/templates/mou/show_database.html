@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Records</title>
+</head>
+<body>
+    <h1>Event Records</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Description</th>
+                <th>Date</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records %}
+                <tr>
+                    <td>{{ record.title }}</td>
+                    <td>{{ record.description }}</td>
+                    <td>{{ record.date }}</td>
+                    <td>{{ record.status }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <div>
+        <span class="step-links">
+            {% if records.has_previous %}
+                <a href="?page=1">&laquo; first</a>
+                <a href="?page={{ records.previous_page_number }}">previous</a>
+            {% endif %}
+            
+            <span class="current">
+                Page {{ records.number }} of {{ records.paginator.num_pages }}.
+            </span>
+    
+            {% if records.has_next %}
+                <a href="?page={{ records.next_page_number }}">next</a>
+                <a href="?page={{ records.paginator.num_pages }}">last &raquo;</a>
+            {% endif %}
+        </span>
+    </div>
+
+    <!-- Department Records -->
+    <h2>Department Records</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records1 %}
+                <tr>
+                    <td>{{ record.code }}</td>
+                    <td>{{ record.name }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Outcome Records -->
+    <h2>Outcome Records</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records2 %}
+                <tr>
+                    <td>{{ record.code }}</td>
+                    <td>{{ record.name }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- MOU Records -->
+    <h2>MOU Records</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Organization</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records3 %}
+                <tr>
+                    <td>{{ record.title }}</td>
+                    <td>{{ record.organization_name }}</td>
+                    <td>{{ record.status }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

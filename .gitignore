@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+venv/
+.env.*
+ENV/
+env/
+.venv/
+
+Django stuff:
+# If you want to track the sqlite DB or media files, remove the lines below from .gitignore
+# db.sqlite3
+# /media
+# /staticfiles
+
+# VS Code
+.vscode/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+.eggs/
+.eggs-info/
+.installed.cfg
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+
+# Pytest
+.cache/
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+
+# Local environment files
+local_settings.py
