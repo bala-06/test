@@ -1,0 +1,21 @@
+<nav class="navbar navbar-bit navbar-expand-lg">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'mou_list' %}">
+            <img src="https://www.bitsathy.ac.in/wp-content/themes/baiotsathycollege/assets/images/header%2006.png" alt="BIT Logo">
+            <span class="text-white ms-2">Bannari Amman Institute of Technology</span>
+        </a>
+        <div class="d-flex">
+            <a href="{% url 'filter_mou' %}" class="text-white text-decoration-none me-3">Filter MOUs</a>
+            {% if user.is_authenticated %}
+                <a href="{% url 'create_mou' %}" class="text-white text-decoration-none me-3">Create New MOU</a>
+            {% endif %}
+            <a href="{% url 'mou_list' %}" class="text-white text-decoration-none me-3">Home</a>
+            <a href="{% url 'about' %}" class="text-white text-decoration-none me-3">About </a>
+            {% if user.is_authenticated %}
+                <a href="{% url 'logout' %}" class="text-white text-decoration-none">Logout</a>
+            {% else %}
+                <a href="{% url 'login' %}" class="text-white text-decoration-none">Login</a>
+            {% endif %}
+        </div>
+    </div>
+</nav>

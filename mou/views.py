@@ -62,12 +62,31 @@ def mou_report_pdf(request, mou_id):
     from reportlab.lib import colors
     from reportlab.lib.units import inch
     from reportlab.lib.pagesizes import letter
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
 
     doc = SimpleDocTemplate(pdf_buf, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    # Register a Unicode-capable TTF font for nicer output (DejaVuSans commonly available)
+    # Fallback: if the TTF isn't available locally, ReportLab will use its default fonts.
+    try:
+        font_path = os.path.join(os.path.dirname(__file__), '..', 'fonts', 'DejaVuSans.ttf')
+        if os.path.exists(font_path):
+            pdfmetrics.registerFont(TTFont('DejaVuSans', font_path))
+            base_font = 'DejaVuSans'
+        else:
+            # Try system install
+            pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
+            base_font = 'DejaVuSans'
+    except Exception:
+        base_font = 'Helvetica'
+
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='CenterTitle', alignment=1, fontSize=16, leading=20))
-    styles.add(ParagraphStyle(name='Small', fontSize=9))
-    normal = styles['Normal']
+    styles.add(ParagraphStyle(name='CenterTitle', alignment=1, fontName=base_font, fontSize=18, leading=22))
+    styles.add(ParagraphStyle(name='Small', fontName=base_font, fontSize=9, leading=11))
+    styles.add(ParagraphStyle(name='Body', fontName=base_font, fontSize=11, leading=14))
+    styles.add(ParagraphStyle(name='TableCell', fontName=base_font, fontSize=10, leading=12))
+    normal = styles['Body']
     small = styles['Small']
 
     story = []
@@ -82,13 +101,13 @@ def mou_report_pdf(request, mou_id):
     except Exception:
         pass
 
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 10))
     story.append(Paragraph('Bannari Amman Institute of Technology', styles['CenterTitle']))
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 14))
 
     # Left: MOU details table (use Paragraphs for wrapping)
     def p(text):
-        return Paragraph(text or '-', normal)
+        return Paragraph(text or '-', styles['TableCell'])
 
     mou_details = [
         [p('<b>MOU Title:</b>'), p(mou.title)],
@@ -105,21 +124,37 @@ def mou_report_pdf(request, mou_id):
         [p('<b>Payment Amount:</b>'), p(f'₹{mou.payment_paid}')],
     ]
 
-    details_table = Table(mou_details, colWidths=[140, 340])
+    # Compute widths based on the document content width so nested tables don't overflow
+    total_width = doc.width
+    left_col_width = total_width * 0.52
+    right_col_width = total_width - left_col_width
+
+    # Make details table fit the left column exactly
+    details_table = Table(mou_details, colWidths=[left_col_width * 0.45, left_col_width * 0.55])
     details_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0,0), (-1,-1), 4),
-        ('RIGHTPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
     ]))
 
     # Right: chart and totals
-    chart_img = RLImage(img_buf, width=4*inch, height=3*inch)
-    totals_para = Paragraph(f'<b>Total events:</b> {len(events)} &nbsp;&nbsp; <b>Completed:</b> {completed} &nbsp;&nbsp; <b>Pending:</b> {pending}', normal)
-    right_frame = [chart_img, Spacer(1,6), totals_para]
+    # Center the chart and size it to the right column
+    chart_width = right_col_width - 12  # small padding
+    chart_height = chart_width * 0.75
+    chart_img = RLImage(img_buf, width=chart_width, height=chart_height)
+    chart_img.hAlign = 'CENTER'
+    totals_para = Paragraph(f'<b>Total events:</b> {len(events)} &nbsp;&nbsp; <b>Completed:</b> {completed} &nbsp;&nbsp; <b>Pending:</b> {pending}', styles['Body'])
+    right_frame = [chart_img, Spacer(1,8), totals_para]
 
     # Two-column top table: details | chart+totals
-    top_table = Table([[details_table, right_frame]], colWidths=[3.2*inch, 3.2*inch])
-    top_table.setStyle(TableStyle([('VALIGN', (0,0),(1,0),'TOP')]))
+    top_table = Table([[details_table, right_frame]], colWidths=[left_col_width, right_col_width])
+    top_table.setStyle(TableStyle([
+        ('VALIGN', (0,0),(1,0),'TOP'),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
     story.append(top_table)
     story.append(Spacer(1, 12))
 
@@ -135,8 +170,12 @@ def mou_report_pdf(request, mou_id):
         comp_table = Table(comp_rows, colWidths=[2.6*inch, 1.2*inch, 2.2*inch])
         comp_table.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 0.25, colors.grey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f0f0f0')),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f7f7f7')),
             ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
         ]))
         story.append(comp_table)
     else:
@@ -156,8 +195,12 @@ def mou_report_pdf(request, mou_id):
         pend_table = Table(pend_rows, colWidths=[2.6*inch, 1.2*inch, 2.2*inch])
         pend_table.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 0.25, colors.grey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#fafafa')),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#ffffff')),
             ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
         ]))
         story.append(pend_table)
     else:
@@ -167,6 +210,61 @@ def mou_report_pdf(request, mou_id):
     doc.build(story)
     pdf_buf.seek(0)
     return HttpResponse(pdf_buf.getvalue(), content_type='application/pdf')
+
+
+def _build_mou_pdf_bytes(mou_id):
+    """Helper: build and return PDF bytes for a mou id."""
+    # We reuse the existing logic in mou_report_pdf but return bytes.
+    # Import the function body locally by calling mou_report_pdf with a fake request
+    # is not desirable; instead duplicate minimal code path: call mou_report_pdf's inner logic
+    # For simplicity, we call mou_report_pdf with None request and capture response.
+    # Create a dummy request-like object? Simpler: import Django test client not needed.
+    # We'll call mou_report_pdf(None, mou_id) assuming it doesn't use request (it doesn't).
+    class _DummyRequest:
+        pass
+
+    response = mou_report_pdf(_DummyRequest(), mou_id)
+    if isinstance(response, HttpResponse):
+        return response.content
+    return None
+
+
+@login_required
+def send_mou_report_email(request, mou_id):
+    """Generate the MOU PDF and send it as an email attachment to both coordinators.
+
+    Requires EMAIL_* settings to be configured (EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL).
+    """
+    mou = get_object_or_404(MOU, id=mou_id)
+
+    to_emails = []
+    if mou.mou_coordinator_email:
+        to_emails.append(mou.mou_coordinator_email)
+    if mou.staff_coordinator_email and mou.staff_coordinator_email not in to_emails:
+        to_emails.append(mou.staff_coordinator_email)
+
+    if not to_emails:
+        messages.error(request, 'No coordinator emails defined for this MOU.')
+        return redirect('view_mou', mou_id=mou_id)
+
+    pdf_bytes = _build_mou_pdf_bytes(mou_id)
+    if not pdf_bytes:
+        messages.error(request, 'Failed to generate PDF report.')
+        return redirect('view_mou', mou_id=mou_id)
+
+    from django.core.mail import EmailMessage
+
+    subject = f'MOU Report: {mou.title}'
+    body = f'Please find the attached MOU report for "{mou.title}".'
+    email = EmailMessage(subject=subject, body=body, to=to_emails)
+    email.attach(f'mou_{mou_id}_report.pdf', pdf_bytes, 'application/pdf')
+    try:
+        email.send()
+        messages.success(request, f'Report sent to: {", ".join(to_emails)}')
+    except Exception as e:
+        messages.error(request, f'Error sending email: {e}')
+
+    return redirect('view_mou', mou_id=mou_id)
 
 def add_event(request, mou_id):
     mou = get_object_or_404(MOU, id=mou_id)

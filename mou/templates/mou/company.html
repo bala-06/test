@@ -86,9 +86,13 @@
                 <span class="text-white ms-2">Bannari Amman Institute of Technology</span>
             </a>
             <div class="d-flex">
-                <span class="text-white me-3">Logged in as: {{ request.user.company.name }}</span>
+                {% if request.user.is_authenticated %}
+                    <span class="text-white me-3">Logged in as: {{ request.user.company.name }}</span>
+                {% endif %}
                 <a href="{% url 'filter_mou' %}" class="text-white text-decoration-none me-3">Filter MOUs</a>
-                <a href="{% url 'create_mou' %}" class="text-white text-decoration-none me-3">Create New MOU</a>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'create_mou' %}" class="text-white text-decoration-none me-3">Create New MOU</a>
+                {% endif %}
                 <a href="{% url 'mou_list' %}" class="text-white text-decoration-none me-3">Home</a>
                
             </div>

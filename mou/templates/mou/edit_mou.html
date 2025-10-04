@@ -48,21 +48,7 @@
     </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-bit navbar-expand-lg">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'mou_list' %}">
-                <img src="https://www.bitsathy.ac.in/wp-content/themes/baiotsathycollege/assets/images/header%2006.png" alt="BIT Logo">
-                <span class="text-white ms-2">Bannari Amman Institute of Technology</span>
-            </a>
-            <div class="d-flex">
-                <a href="{% url 'filter_mou' %}" class="text-white text-decoration-none me-3">Filter MOUs</a>
-                <a href="{% url 'create_mou' %}" class="text-white text-decoration-none me-3">Create New MOU</a>
-                <a href="{% url 'mou_list' %}" class="text-white text-decoration-none me-3">Home</a>
-                <a href="{% url 'about' %}" class="text-white text-decoration-none">About</a>
-            </div>
-        </div>
-    </nav>
+    {% include 'mou/_navbar.html' %}
 
     <div class="container py-5">
         <h1 class="text-center mb-4" style="color: #012B72;">Edit MOU</h1>
