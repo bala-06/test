@@ -10,7 +10,7 @@
                 <a href="{% url 'create_mou' %}" class="text-white text-decoration-none me-3">Create New MOU</a>
             {% endif %}
             <a href="{% url 'mou_list' %}" class="text-white text-decoration-none me-3">Home</a>
-            <a href="{% url 'org_login_request' %}" class="text-white text-decoration-none me-3">Organization Login</a>
+            {% comment %} <a href="{% url 'org_login_request' %}" class="text-white text-decoration-none me-3">Organization Login</a> {% endcomment %}
             <a href="{% url 'about' %}" class="text-white text-decoration-none me-3">About </a>
             {% if user.is_authenticated %}
                 {% if user.is_staff %}
@@ -20,13 +20,17 @@
                 {% endif %}
                 <a href="{% url 'logout' %}" class="text-white text-decoration-none">Logout</a>
             {% else %}
-                <a href="/admin/" class="text-white text-decoration-none me-3">Admin Login</a>
-                <a href="{% url 'login' %}" class="text-white text-decoration-none">Login</a>
+                {% comment %} <a href="/admin/" class="text-white text-decoration-none me-3">Admin Login</a> {% endcomment %}
+                {% comment %} <a href="{% url 'login' %}" class="text-white text-decoration-none">Login</a> {% endcomment %}
             {% endif %}
 
             {% if request.session.org_email %}
                 <span class="text-white ms-3">Org: {{ request.session.org_email }}</span>
                 <a href="{% url 'org_logout' %}" class="text-white text-decoration-none ms-2">Org Logout</a>
+            {% endif %}
+            {% if request.session.bit_email %}
+                <span class="text-white ms-3">Student: {{ request.session.bit_email }}</span>
+                <a href="{% url 'bit_logout' %}" class="text-white text-decoration-none ms-2">Logout</a>
             {% endif %}
         </div>
     </div>

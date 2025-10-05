@@ -3,7 +3,7 @@ from . import views
 
 urlpatterns = [
     path('create/', views.create_mou, name='create_mou'),
-    path('', views.mou_list, name='mou_list'),
+    path('', views.login_view, name='login'),
     path('mou/<int:mou_id>/add_event/', views.add_event, name='add_event'),
     path('view/<int:mou_id>/', views.view_mou, name='view_mou'),
     path('edit/<int:mou_id>/', views.edit_mou, name='edit_mou'),
@@ -25,6 +25,11 @@ urlpatterns = [
     path('org/verify/', views.org_login_verify, name='org_login_verify'),
     path('org/logout/', views.org_logout, name='org_logout'),
     path('org/mous/', views.org_mou_list, name='org_mou_list'),
+    path('bit/login/', views.bit_login_request, name='bit_login_request'),
+    path('bit/verify/', views.bit_login_verify, name='bit_login_verify'),
+    path('bit/logout/', views.bit_logout, name='bit_logout'),
+    path('password-reset/', views.password_reset_request, name='password_reset_request'),
+    path('password-reset/verify/', views.password_reset_verify, name='password_reset_verify'),
     path('mou/<int:mou_id>/report/pdf/', views.mou_report_pdf, name='mou_report_pdf'),
     path('mou/<int:mou_id>/report/email/', views.send_mou_report_email, name='send_mou_report_email'),
 ]

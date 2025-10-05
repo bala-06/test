@@ -35,6 +35,9 @@ from django.urls import reverse
 from .models import OrgOTP
 import random
 from datetime import timedelta
+from .models import PasswordResetOTP
+from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
 def mou_report_pdf(request, mou_id):
     """Generate a nicely formatted PDF report using ReportLab Platypus.
 
@@ -392,6 +395,11 @@ def mou_list(request):
         'expired_mous_by_department': expired_mous_by_department,
     })
 def create_mou(request):
+    # Only staff or admin (Django User.is_staff) can create MOUs
+    if not request.user.is_authenticated or not request.user.is_staff:
+        messages.error(request, 'Only staff/admin users can create MOUs.')
+        return redirect('mou_list')
+
     if request.method == 'POST':
         form = MOUForm(request.POST, request.FILES)
         if form.is_valid():
@@ -408,20 +416,52 @@ def view_mou(request, mou_id):
     department = ', '.join([dept.name for dept in mou.department.all()])
     outcome = ', '.join([out.name for out in mou.outcome.all()])
 
+    # Determine if current user/session can edit this MOU
+    can_edit = False
+    # staff/admin users may edit
+    if request.user.is_authenticated and request.user.is_staff:
+        can_edit = True
+    # organization session users can edit MOUs tied to their email or organization localpart
+    org_email = request.session.get('org_email')
+    if org_email:
+        localpart = org_email.split('@')[0]
+        if (mou.mou_coordinator_email and mou.mou_coordinator_email.lower() == org_email.lower()) or \
+           (mou.staff_coordinator_email and mou.staff_coordinator_email.lower() == org_email.lower()) or \
+           (mou.organization_name and localpart.lower() in mou.organization_name.lower()):
+            can_edit = True
+
     return render(request, 'mou/view_mou.html', {
         'mou': mou,
         'events': events,
         'department': department,
         'outcome': outcome,
+        'can_edit': can_edit,
     })
 
 def edit_mou(request, mou_id):
     mou = get_object_or_404(MOU, id=mou_id)
+    # Permission checks
+    org_email = request.session.get('org_email')
+    user = request.user
+    allowed = False
+    if user.is_authenticated and user.is_staff:
+        allowed = True
+    if org_email:
+        localpart = org_email.split('@')[0]
+        if (mou.mou_coordinator_email and mou.mou_coordinator_email.lower() == org_email.lower()) or \
+           (mou.staff_coordinator_email and mou.staff_coordinator_email.lower() == org_email.lower()) or \
+           (mou.organization_name and localpart.lower() in (mou.organization_name or '').lower()):
+            allowed = True
+
+    if not allowed:
+        messages.error(request, 'You do not have permission to edit this MOU.')
+        return redirect('view_mou', mou_id=mou_id)
+
     if request.method == 'POST':
         form = MOUForm(request.POST, request.FILES, instance=mou)
         if form.is_valid():
             form.save()
-            return redirect('mou_list')
+            return redirect('view_mou', mou_id=mou.id)
     else:
         form = MOUForm(instance=mou)
     return render(request, 'mou/edit_mou.html', {'form': form, 'mou': mou})
@@ -447,26 +487,39 @@ def delete_mou(request, mou_id):
 
 @login_required
 def delete_mou(request, mou_id):
+    # Only staff/admin can delete
+    if not request.user.is_authenticated or not request.user.is_staff:
+        messages.error(request, 'Only staff/admin can delete MOUs.')
+        return redirect('view_mou', mou_id=mou_id)
     mou = get_object_or_404(MOU, id=mou_id)
     mou.delete()
     return redirect('mou_list')
 
 def edit_event(request, event_id):
-    print(f"Edit Event View Called for Event ID: {event_id}")
     event = get_object_or_404(Event, id=event_id)
+    mou = event.mou
+    # Permission: staff/admin or org owner can edit
+    org_email = request.session.get('org_email')
+    user = request.user
+    allowed = False
+    if user.is_authenticated and user.is_staff:
+        allowed = True
+    if org_email:
+        localpart = org_email.split('@')[0]
+        if (mou.mou_coordinator_email and mou.mou_coordinator_email.lower() == org_email.lower()) or \
+           (mou.staff_coordinator_email and mou.staff_coordinator_email.lower() == org_email.lower()) or \
+           (mou.organization_name and localpart.lower() in (mou.organization_name or '').lower()):
+            allowed = True
+
+    if not allowed:
+        messages.error(request, 'You do not have permission to edit this event.')
+        return redirect('view_mou', mou_id=mou.id)
+
     if request.method == 'POST':
-        print("POST request received.")
         form = EventForm(request.POST, instance=event)
         if form.is_valid():
-            
-            print("Form is valid. Saving changes...")
             form.save()
-            print("Event saved. Redirecting to view_event.")
-            id=event_id
-            mou_id = event.mou.id
-            return redirect('view_mou', mou_id=mou_id)
-        else:
-            print("Form is not valid:", form.errors)
+            return redirect('view_mou', mou_id=mou.id)
     else:
         form = EventForm(instance=event)
     return render(request, 'mou/edit_event.html', {'form': form, 'event': event})
@@ -494,6 +547,11 @@ def delete_event(request, event_id):
 
 @login_required
 def delete_event(request, event_id):
+    # Only staff/admin may delete events
+    if not request.user.is_authenticated or not request.user.is_staff:
+        messages.error(request, 'Only staff/admin can delete events.')
+        event = get_object_or_404(Event, id=event_id)
+        return redirect('view_mou', mou_id=event.mou.id)
     event = get_object_or_404(Event, id=event_id)
     mou_id = event.mou.id
     event.delete()
@@ -589,14 +647,47 @@ def student_view(request,mou_id):
 def login_view(request):
     """Display and process login form. Students can still access student pages without login."""
     next_url = request.GET.get('next') or request.POST.get('next') or ''
+    role = None
     if request.method == 'POST':
-        form = AuthenticationForm(request=request, data=request.POST)
+        role = request.POST.get('role')
         username = request.POST.get('username')
+        password = request.POST.get('password')
+
         ip = request.META.get('REMOTE_ADDR')
-        if form.is_valid():
-            user = form.get_user()
+        # Organization role uses OTP flow: send/request OTP
+        if role == 'org':
+            request.session['org_login_email'] = username
+            return redirect('org_login_request')
+
+        # For students, require email domain bitsathy.ac.in
+        if role == 'student':
+            if '@' not in username or not username.lower().endswith('@bitsathy.ac.in'):
+                messages.error(request, 'Students must login using their @bitsathy.ac.in email.')
+                return render(request, 'mou/login.html', {})
+            # find user by email
+            try:
+                uobj = User.objects.filter(email__iexact=username).first()
+                auth_username = uobj.username if uobj else None
+            except Exception:
+                auth_username = None
+            if not auth_username:
+                messages.error(request, 'No student account found for this email.')
+                return render(request, 'mou/login.html', {})
+            user = authenticate(request=request, username=auth_username, password=password)
+        else:
+            # staff/admin: allow any username (could be username or email)
+            # if user provided an email, try to resolve to username first
+            auth_username = username
+            if '@' in username:
+                try:
+                    uobj = User.objects.filter(email__iexact=username).first()
+                    if uobj:
+                        auth_username = uobj.username
+                except Exception:
+                    pass
+            user = authenticate(request=request, username=auth_username, password=password)
+        if user is not None:
             auth_login(request, user)
-            # record successful attempt
             try:
                 LoginAttempt.objects.create(username=username or '', success=True, ip_address=ip)
             except Exception:
@@ -606,16 +697,14 @@ def login_view(request):
                 return redirect(next_url)
             return redirect('mou_list')
         else:
-            # record failed attempt
             try:
                 LoginAttempt.objects.create(username=username or '', success=False, ip_address=ip)
             except Exception:
                 pass
             messages.error(request, 'Login failed. Check your credentials and try again.')
-    else:
-        form = AuthenticationForm()
 
-    return render(request, 'mou/login.html', {'form': form, 'next': next_url})
+    # GET or fallback
+    return render(request, 'mou/login.html', {})
 
 
 # Organization OTP login: request OTP by providing email (organization user)
@@ -715,6 +804,156 @@ def org_mou_list(request):
     ).prefetch_related('department', 'outcome')
 
     return render(request, 'mou/org_mou_list.html', {'mous': mous, 'org_email': org_email})
+
+
+# BIT students OTP login
+class BitEmailForm(forms.Form):
+    email = forms.EmailField(label='BITSATHY Email')
+
+
+def bit_login_request(request):
+    """Request OTP for @bitsathy.ac.in student login."""
+    if request.method == 'POST':
+        form = BitEmailForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+            if not email.lower().endswith('@bitsathy.ac.in'):
+                messages.error(request, 'Please use your @bitsathy.ac.in email for student login.')
+                return redirect('bit_login_request')
+            code = f"{random.randint(0,999999):06d}"
+            now = timezone.now()
+            expires = now + timedelta(minutes=10)
+            OrgOTP.objects.create(email=email, code=code, expires_at=expires)
+            # send email
+            from django.core.mail import send_mail
+            subject = 'Your BIT OTP'
+            message = f'Your BIT OTP is: {code}. Expires in 10 minutes.'
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+            try:
+                send_mail(subject, message, from_email, [email], fail_silently=False)
+            except Exception:
+                pass
+            request.session['bit_login_email'] = email
+            return redirect('bit_login_verify')
+    else:
+        form = BitEmailForm()
+    return render(request, 'mou/bit_login.html', {'form': form})
+
+
+def bit_login_verify(request):
+    email = request.session.get('bit_login_email')
+    if not email:
+        return redirect('bit_login_request')
+    if request.method == 'POST':
+        form = OrgOTPForm(request.POST)
+        if form.is_valid():
+            code = form.cleaned_data['code'].strip()
+            now = timezone.now()
+            try:
+                otp = OrgOTP.objects.filter(email=email, code=code, used=False, expires_at__gte=now).latest('created_at')
+            except OrgOTP.DoesNotExist:
+                otp = None
+            if otp:
+                otp.used = True
+                otp.save()
+                # mark bit session
+                request.session['bit_email'] = email
+                return redirect('mou_list')
+            else:
+                messages.error(request, 'Invalid or expired OTP. Please request again.')
+                return redirect('bit_login_request')
+    else:
+        form = OrgOTPForm()
+    return render(request, 'mou/bit_verify.html', {'form': form, 'email': email})
+
+
+def bit_logout(request):
+    request.session.pop('bit_email', None)
+    messages.info(request, 'Student logged out.')
+    return redirect('login')
+
+
+# Password reset via OTP
+class PasswordResetRequestForm(forms.Form):
+    username_or_email = forms.CharField(label='Username or Email')
+
+
+def password_reset_request(request):
+    if request.method == 'POST':
+        form = PasswordResetRequestForm(request.POST)
+        if form.is_valid():
+            val = form.cleaned_data['username_or_email']
+            # lookup user
+            try:
+                user = User.objects.filter(Q(username__iexact=val) | Q(email__iexact=val)).first()
+            except Exception:
+                user = None
+
+            if not user:
+                messages.error(request, 'User not found')
+                return redirect('password_reset_request')
+
+            code = f"{random.randint(0,999999):06d}"
+            now = timezone.now()
+            expires = now + timedelta(minutes=15)
+            PasswordResetOTP.objects.create(username=user.username, email=user.email or '', code=code, expires_at=expires)
+            # send email
+            subject = 'Password reset OTP'
+            message = f'Your password reset OTP is: {code} (valid for 15 minutes)'
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+            try:
+                from django.core.mail import send_mail
+                send_mail(subject, message, from_email, [user.email], fail_silently=False)
+            except Exception:
+                pass
+
+            request.session['pwd_reset_username'] = user.username
+            return redirect('password_reset_verify')
+    else:
+        form = PasswordResetRequestForm()
+    return render(request, 'mou/password_reset_request.html', {'form': form})
+
+
+class PasswordResetVerifyForm(forms.Form):
+    code = forms.CharField(max_length=10, label='OTP')
+    new_password = forms.CharField(widget=forms.PasswordInput, label='New password')
+
+
+def password_reset_verify(request):
+    username = request.session.get('pwd_reset_username')
+    if not username:
+        return redirect('password_reset_request')
+
+    if request.method == 'POST':
+        form = PasswordResetVerifyForm(request.POST)
+        if form.is_valid():
+            code = form.cleaned_data['code'].strip()
+            new_password = form.cleaned_data['new_password']
+            now = timezone.now()
+            try:
+                otp = PasswordResetOTP.objects.filter(username=username, code=code, used=False, expires_at__gte=now).latest('created_at')
+            except PasswordResetOTP.DoesNotExist:
+                otp = None
+
+            if otp:
+                otp.used = True
+                otp.save()
+                # reset password
+                try:
+                    user = User.objects.get(username=username)
+                    user.set_password(new_password)
+                    user.save()
+                    messages.success(request, 'Password reset successful. You can now login.')
+                    return redirect('login')
+                except User.DoesNotExist:
+                    messages.error(request, 'User not found during reset.')
+                    return redirect('password_reset_request')
+            else:
+                messages.error(request, 'Invalid or expired OTP.')
+                return redirect('password_reset_request')
+    else:
+        form = PasswordResetVerifyForm()
+    return render(request, 'mou/password_reset_verify.html', {'form': form})
 
 
 @login_required
