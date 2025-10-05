@@ -25,7 +25,11 @@ SECRET_KEY = 'django-insecure-114s$n4p9s*n6dny8(f2^1tw$2bh0^zg2g@15c0pv+b=jep_en
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '.ngrok-free.app',
+]
 
 
 # Application definition
@@ -39,6 +43,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'mou',
 ]
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.ngrok-free.app',
+]
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -129,3 +137,38 @@ MEDIA_ROOT = BASE_DIR / 'media'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+# Email settings (development defaults)
+# In development, use the console backend so emails are shown in the runserver console.
+# Load environment variables from .env if python-dotenv is available
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=BASE_DIR / '.env')
+except Exception:
+    # python-dotenv is optional; environment variables may already be set
+    pass
+
+# Configure email from environment variables when available
+EMAIL_HOST = os.getenv('EMAIL_HOST')
+EMAIL_PORT = os.getenv('EMAIL_PORT')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', True)
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '06bala.t@gmail.com')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '06bala.t@gmail.com')
+# If an EMAIL_HOST is provided, configure SMTP backend; otherwise default to console backend for dev
+if EMAIL_HOST:
+    EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+    try:
+        EMAIL_PORT = int(EMAIL_PORT) if EMAIL_PORT else 587
+    except Exception:
+        EMAIL_PORT = 587
+    # Convert truthy strings to boolean
+    if isinstance(EMAIL_USE_TLS, str):
+        EMAIL_USE_TLS = EMAIL_USE_TLS.lower() in ('1', 'true', 'yes', 'on')
+    else:
+        EMAIL_USE_TLS = bool(EMAIL_USE_TLS)
+else:
+    # Development default: console backend
+    EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+

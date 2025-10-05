@@ -26,6 +26,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import urllib.request
 from datetime import datetime
+import logging
+from django.conf import settings
 def mou_report_pdf(request, mou_id):
     """Generate a nicely formatted PDF report using ReportLab Platypus.
 
@@ -251,18 +253,75 @@ def send_mou_report_email(request, mou_id):
     if not pdf_bytes:
         messages.error(request, 'Failed to generate PDF report.')
         return redirect('view_mou', mou_id=mou_id)
+    # Debug: log PDF size
+    try:
+        print(f'Generated PDF size: {len(pdf_bytes)} bytes')
+        logging.getLogger(__name__).debug('Generated PDF size: %s bytes', len(pdf_bytes))
+    except Exception:
+        pass
 
-    from django.core.mail import EmailMessage
+    from django.core.mail import EmailMessage, get_connection
 
     subject = f'MOU Report: {mou.title}'
     body = f'Please find the attached MOU report for "{mou.title}".'
-    email = EmailMessage(subject=subject, body=body, to=to_emails)
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+    if not from_email:
+        messages.warning(request, 'No DEFAULT_FROM_EMAIL or EMAIL_HOST_USER configured; email may not be sent correctly.')
+
+    email = EmailMessage(subject=subject, body=body, from_email=from_email, to=to_emails)
     email.attach(f'mou_{mou_id}_report.pdf', pdf_bytes, 'application/pdf')
+
+    logger = logging.getLogger(__name__)
+    # Dump helpful non-sensitive email configuration for debugging
     try:
-        email.send()
-        messages.success(request, f'Report sent to: {", ".join(to_emails)}')
+        logger.debug('EMAIL_BACKEND=%s', getattr(settings, 'EMAIL_BACKEND', None))
+        logger.debug('EMAIL_HOST=%s', getattr(settings, 'EMAIL_HOST', None))
+        logger.debug('EMAIL_PORT=%s', getattr(settings, 'EMAIL_PORT', None))
+        logger.debug('DEFAULT_FROM_EMAIL=%s', getattr(settings, 'DEFAULT_FROM_EMAIL', None))
+        logger.debug('EMAIL_HOST_USER=%s', 'set' if getattr(settings, 'EMAIL_HOST_USER', None) else 'unset')
+    except Exception:
+        logger.exception('Failed to read email settings for debug')
+
+    # Also print to server console so user sees it in terminal when testing
+    print('DEBUG EMAIL SETTINGS:', {
+        'EMAIL_BACKEND': getattr(settings, 'EMAIL_BACKEND', None),
+        'EMAIL_HOST': getattr(settings, 'EMAIL_HOST', None),
+        'EMAIL_PORT': getattr(settings, 'EMAIL_PORT', None),
+        'DEFAULT_FROM_EMAIL': getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+        'EMAIL_HOST_USER_set': bool(getattr(settings, 'EMAIL_HOST_USER', None)),
+    })
+
+    print('Sending email to:', to_emails)
+    # Log some non-sensitive debug info
+    logger.debug('Attempting to send MOU report email', extra={'mou_id': mou_id, 'to': to_emails})
+    try:
+        # Use explicit connection so we can surface errors immediately
+        connection = get_connection(fail_silently=False)
+        # Optionally open the connection to force auth now
+        try:
+            connection.open()
+            logger.debug('Email connection opened successfully')
+            print('Email connection opened successfully')
+        except Exception as open_exc:
+            logger.exception('Failed to open email connection: %s', open_exc)
+            print('Failed to open email connection:', open_exc)
+            messages.error(request, f'Failed to open email connection: {open_exc}. Check EMAIL_HOST/EMAIL_PORT/EMAIL_HOST_USER/PASSWORD in settings.')
+            return redirect('view_mou', mou_id=mou_id)
+
+        send_res = connection.send_messages([email])
+        # send_messages returns number of emails sent (may be 1)
+        if send_res and send_res > 0:
+            messages.success(request, f'Report sent to: {", ".join(to_emails)}')
+            logger.info('MOU report email sent to %s (mou_id=%s)', to_emails, mou_id)
+        else:
+            messages.error(request, 'Email API returned no-sent result (0); check SMTP server logs/settings.')
+            logger.error('Email send returned 0 for mou_id=%s to=%s', mou_id, to_emails)
+
     except Exception as e:
-        messages.error(request, f'Error sending email: {e}')
+        # Log full traceback to console/logs for debugging
+        logger.exception('Error sending email for mou_id=%s: %s', mou_id, e)
+        # Show a helpful message (but don't reveal secrets)
+        messages.error(request, f'Error sending email: {e}. Check server logs and EMAIL_* settings.')
 
     return redirect('view_mou', mou_id=mou_id)
 
