@@ -1,0 +1,29 @@
+{% extends 'mou/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>Compose MOU Report Email</h2>
+  <p>Sending report for: <strong>{{ mou.title }}</strong></p>
+  <p>Recipients: {{ to_emails|join:", " }}</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+      {{ form.subject.label_tag }}
+      {{ form.subject }}
+      {% if form.subject.errors %}
+        <div class="text-danger">{{ form.subject.errors }}</div>
+      {% endif %}
+    </div>
+    <div class="mb-3">
+      {{ form.body.label_tag }}
+      {{ form.body }}
+      {% if form.body.errors %}
+        <div class="text-danger">{{ form.body.errors }}</div>
+      {% endif %}
+    </div>
+    <button type="submit" class="btn btn-primary">Send Email</button>
+    <a href="{% url 'view_mou' mou.id %}" class="btn btn-secondary">Cancel</a>
+  </form>
+</div>
+{% endblock %}

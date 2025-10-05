@@ -19,8 +19,8 @@ urlpatterns = [
     path('student_view/<int:mou_id>/', views.student_view, name='student_view')
     ,
     path('login/', views.login_view, name='login'),
-    path('logout/', views.logout_view, name='logout'),
     path('register/', views.register, name='register'),
+    path('logout/', views.logout_view, name='logout'),
     path('mou/<int:mou_id>/report/pdf/', views.mou_report_pdf, name='mou_report_pdf'),
     path('mou/<int:mou_id>/report/email/', views.send_mou_report_email, name='send_mou_report_email'),
 ]

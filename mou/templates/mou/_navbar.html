@@ -12,8 +12,14 @@
             <a href="{% url 'mou_list' %}" class="text-white text-decoration-none me-3">Home</a>
             <a href="{% url 'about' %}" class="text-white text-decoration-none me-3">About </a>
             {% if user.is_authenticated %}
+                {% if user.is_staff %}
+                    <a href="/admin/" class="text-white text-decoration-none me-3">Admin</a>
+                {% else %}
+                    <a href="/admin/" class="text-white text-decoration-none me-3">Admin</a>
+                {% endif %}
                 <a href="{% url 'logout' %}" class="text-white text-decoration-none">Logout</a>
             {% else %}
+                <a href="/admin/" class="text-white text-decoration-none me-3">Admin Login</a>
                 <a href="{% url 'login' %}" class="text-white text-decoration-none">Login</a>
             {% endif %}
         </div>

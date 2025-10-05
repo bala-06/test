@@ -28,6 +28,7 @@ import urllib.request
 from datetime import datetime
 import logging
 from django.conf import settings
+from django import forms
 def mou_report_pdf(request, mou_id):
     """Generate a nicely formatted PDF report using ReportLab Platypus.
 
@@ -231,11 +232,25 @@ def _build_mou_pdf_bytes(mou_id):
     return None
 
 
+# Small form to allow editing email subject/body before sending
+class EmailForm(forms.Form):
+    subject = forms.CharField(
+        max_length=250,
+        label='Subject',
+        widget=forms.TextInput(attrs={"class": "form-control"})
+    )
+    body = forms.CharField(
+        widget=forms.Textarea(attrs={"class": "form-control", 'rows': 8}),
+        required=False,
+        label='Message body'
+    )
+
+
 @login_required
 def send_mou_report_email(request, mou_id):
-    """Generate the MOU PDF and send it as an email attachment to both coordinators.
+    """Show a compose form (GET) to edit subject/body, and send email (POST).
 
-    Requires EMAIL_* settings to be configured (EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL).
+    If the user submits the form, generate the PDF and send using provided subject/body.
     """
     mou = get_object_or_404(MOU, id=mou_id)
 
@@ -249,81 +264,61 @@ def send_mou_report_email(request, mou_id):
         messages.error(request, 'No coordinator emails defined for this MOU.')
         return redirect('view_mou', mou_id=mou_id)
 
-    pdf_bytes = _build_mou_pdf_bytes(mou_id)
-    if not pdf_bytes:
-        messages.error(request, 'Failed to generate PDF report.')
-        return redirect('view_mou', mou_id=mou_id)
-    # Debug: log PDF size
-    try:
-        print(f'Generated PDF size: {len(pdf_bytes)} bytes')
-        logging.getLogger(__name__).debug('Generated PDF size: %s bytes', len(pdf_bytes))
-    except Exception:
-        pass
+    default_subject = f'MOU Report: {mou.title}'
+    default_body = f'Please find the attached MOU report for "{mou.title}".'
 
-    from django.core.mail import EmailMessage, get_connection
+    if request.method == 'POST':
+        form = EmailForm(request.POST)
+        if form.is_valid():
+            subject = form.cleaned_data['subject']
+            body = form.cleaned_data['body']
 
-    subject = f'MOU Report: {mou.title}'
-    body = f'Please find the attached MOU report for "{mou.title}".'
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
-    if not from_email:
-        messages.warning(request, 'No DEFAULT_FROM_EMAIL or EMAIL_HOST_USER configured; email may not be sent correctly.')
+            pdf_bytes = _build_mou_pdf_bytes(mou_id)
+            if not pdf_bytes:
+                messages.error(request, 'Failed to generate PDF report.')
+                return redirect('view_mou', mou_id=mou_id)
 
-    email = EmailMessage(subject=subject, body=body, from_email=from_email, to=to_emails)
-    email.attach(f'mou_{mou_id}_report.pdf', pdf_bytes, 'application/pdf')
+            from django.core.mail import EmailMessage, get_connection
 
-    logger = logging.getLogger(__name__)
-    # Dump helpful non-sensitive email configuration for debugging
-    try:
-        logger.debug('EMAIL_BACKEND=%s', getattr(settings, 'EMAIL_BACKEND', None))
-        logger.debug('EMAIL_HOST=%s', getattr(settings, 'EMAIL_HOST', None))
-        logger.debug('EMAIL_PORT=%s', getattr(settings, 'EMAIL_PORT', None))
-        logger.debug('DEFAULT_FROM_EMAIL=%s', getattr(settings, 'DEFAULT_FROM_EMAIL', None))
-        logger.debug('EMAIL_HOST_USER=%s', 'set' if getattr(settings, 'EMAIL_HOST_USER', None) else 'unset')
-    except Exception:
-        logger.exception('Failed to read email settings for debug')
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+            if not from_email:
+                messages.warning(request, 'No DEFAULT_FROM_EMAIL or EMAIL_HOST_USER configured; email may not be sent correctly.')
 
-    # Also print to server console so user sees it in terminal when testing
-    print('DEBUG EMAIL SETTINGS:', {
-        'EMAIL_BACKEND': getattr(settings, 'EMAIL_BACKEND', None),
-        'EMAIL_HOST': getattr(settings, 'EMAIL_HOST', None),
-        'EMAIL_PORT': getattr(settings, 'EMAIL_PORT', None),
-        'DEFAULT_FROM_EMAIL': getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-        'EMAIL_HOST_USER_set': bool(getattr(settings, 'EMAIL_HOST_USER', None)),
-    })
+            email = EmailMessage(subject=subject, body=body, from_email=from_email, to=to_emails)
+            email.attach(f'mou_{mou_id}_report.pdf', pdf_bytes, 'application/pdf')
 
-    print('Sending email to:', to_emails)
-    # Log some non-sensitive debug info
-    logger.debug('Attempting to send MOU report email', extra={'mou_id': mou_id, 'to': to_emails})
-    try:
-        # Use explicit connection so we can surface errors immediately
-        connection = get_connection(fail_silently=False)
-        # Optionally open the connection to force auth now
-        try:
-            connection.open()
-            logger.debug('Email connection opened successfully')
-            print('Email connection opened successfully')
-        except Exception as open_exc:
-            logger.exception('Failed to open email connection: %s', open_exc)
-            print('Failed to open email connection:', open_exc)
-            messages.error(request, f'Failed to open email connection: {open_exc}. Check EMAIL_HOST/EMAIL_PORT/EMAIL_HOST_USER/PASSWORD in settings.')
+            logger = logging.getLogger(__name__)
+            try:
+                connection = get_connection(fail_silently=False)
+                try:
+                    connection.open()
+                except Exception as open_exc:
+                    logger.exception('Failed to open email connection: %s', open_exc)
+                    messages.error(request, f'Failed to open email connection: {open_exc}. Check EMAIL settings.')
+                    return redirect('view_mou', mou_id=mou_id)
+
+                send_res = connection.send_messages([email])
+                if send_res and send_res > 0:
+                    messages.success(request, f'Report sent to: {", ".join(to_emails)}')
+                    logger.info('MOU report email sent to %s (mou_id=%s)', to_emails, mou_id)
+                else:
+                    messages.error(request, 'Email API returned no-sent result (0); check SMTP server logs/settings.')
+                    logger.error('Email send returned 0 for mou_id=%s to=%s', mou_id, to_emails)
+
+            except Exception as e:
+                logger.exception('Error sending email for mou_id=%s: %s', mou_id, e)
+                messages.error(request, f'Error sending email: {e}. Check server logs and EMAIL_* settings.')
+
             return redirect('view_mou', mou_id=mou_id)
+    else:
+        # GET: show compose form with default subject/body
+        form = EmailForm(initial={'subject': default_subject, 'body': default_body})
 
-        send_res = connection.send_messages([email])
-        # send_messages returns number of emails sent (may be 1)
-        if send_res and send_res > 0:
-            messages.success(request, f'Report sent to: {", ".join(to_emails)}')
-            logger.info('MOU report email sent to %s (mou_id=%s)', to_emails, mou_id)
-        else:
-            messages.error(request, 'Email API returned no-sent result (0); check SMTP server logs/settings.')
-            logger.error('Email send returned 0 for mou_id=%s to=%s', mou_id, to_emails)
-
-    except Exception as e:
-        # Log full traceback to console/logs for debugging
-        logger.exception('Error sending email for mou_id=%s: %s', mou_id, e)
-        # Show a helpful message (but don't reveal secrets)
-        messages.error(request, f'Error sending email: {e}. Check server logs and EMAIL_* settings.')
-
-    return redirect('view_mou', mou_id=mou_id)
+    return render(request, 'mou/compose_email.html', {
+        'form': form,
+        'mou': mou,
+        'to_emails': to_emails,
+    })
 
 def add_event(request, mou_id):
     mou = get_object_or_404(MOU, id=mou_id)
@@ -625,22 +620,6 @@ def logout_view(request):
 
 
 def register(request):
-    """Simple user registration view used by the register.html template."""
-    if request.method == 'POST':
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-
-        if not username or not password:
-            messages.error(request, 'Username and password are required.')
-            return render(request, 'mou/register.html')
-
-        if User.objects.filter(username=username).exists():
-            messages.error(request, 'Username already taken.')
-            return render(request, 'mou/register.html')
-
-        user = User.objects.create_user(username=username, email=email, password=password)
-        messages.success(request, 'Account created successfully. You can now login.')
-        return redirect('login')
-
-    return render(request, 'mou/register.html')
+    """Public registration disabled. Redirect to admin login so only staff can create users."""
+    messages.info(request, 'Public registration is disabled. Please contact your administrator or use the Admin site to create accounts.')
+    return redirect('/admin/login/?next=/admin/')
