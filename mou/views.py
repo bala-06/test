@@ -29,6 +29,12 @@ from datetime import datetime
 import logging
 from django.conf import settings
 from django import forms
+from django.utils import timezone
+from django.conf import settings
+from django.urls import reverse
+from .models import OrgOTP
+import random
+from datetime import timedelta
 def mou_report_pdf(request, mou_id):
     """Generate a nicely formatted PDF report using ReportLab Platypus.
 
@@ -610,6 +616,105 @@ def login_view(request):
         form = AuthenticationForm()
 
     return render(request, 'mou/login.html', {'form': form, 'next': next_url})
+
+
+# Organization OTP login: request OTP by providing email (organization user)
+class OrgEmailForm(forms.Form):
+    email = forms.EmailField(label='Organization Email')
+
+
+class OrgOTPForm(forms.Form):
+    code = forms.CharField(max_length=10, label='OTP')
+
+
+def org_login_request(request):
+    """Step 1: organization user supplies their email and an OTP is sent."""
+    if request.method == 'POST':
+        form = OrgEmailForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+            # Generate numeric 6-digit OTP
+            code = f"{random.randint(0,999999):06d}"
+            now = timezone.now()
+            expires = now + timedelta(minutes=10)
+            # save OTP
+            otp = OrgOTP.objects.create(email=email, code=code, expires_at=expires)
+
+            # send email (console backend in DEBUG) - simple message
+            from django.core.mail import send_mail
+            subject = 'Your login OTP'
+            message = f'Your OTP for organization login is: {code}. It expires in 10 minutes.'
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+            try:
+                send_mail(subject, message, from_email, [email], fail_silently=False)
+            except Exception:
+                # continue silently; user will see verify form
+                pass
+
+            # store email in session temporarily and redirect to verify
+            request.session['org_login_email'] = email
+            return redirect('org_login_verify')
+    else:
+        form = OrgEmailForm()
+    return render(request, 'mou/org_login.html', {'form': form})
+
+
+def org_login_verify(request):
+    """Step 2: verify OTP. On success mark session 'org_email' to allow org-only views."""
+    email = request.session.get('org_login_email')
+    if not email:
+        return redirect('org_login_request')
+
+    if request.method == 'POST':
+        form = OrgOTPForm(request.POST)
+        if form.is_valid():
+            code = form.cleaned_data['code'].strip()
+            now = timezone.now()
+            # find matching unused OTP
+            try:
+                otp = OrgOTP.objects.filter(email=email, code=code, used=False, expires_at__gte=now).latest('created_at')
+            except OrgOTP.DoesNotExist:
+                otp = None
+
+            if otp:
+                otp.used = True
+                otp.save()
+                # mark org session as logged in
+                request.session['org_email'] = email
+                # redirect to org dashboard or mou list filtered to their org
+                return redirect('org_mou_list')
+            else:
+                messages.error(request, 'Invalid or expired OTP. Please request a new OTP.')
+                return redirect('org_login_request')
+    else:
+        form = OrgOTPForm()
+    return render(request, 'mou/org_verify.html', {'form': form, 'email': email})
+
+
+def org_logout(request):
+    request.session.pop('org_email', None)
+    messages.info(request, 'Organization user logged out.')
+    return redirect('mou_list')
+
+
+def org_mou_list(request):
+    """Show only MOU entries that belong to the logged-in organization (match by email/organization_name).
+
+    This is a simple matching rule: MOU.organization_name contains the email's local part or the email exact match to coordinator emails.
+    """
+    org_email = request.session.get('org_email')
+    if not org_email:
+        return redirect('org_login_request')
+
+    # Prefer MOU entries where coordinator email matches the org email, or organization_name contains localpart
+    localpart = org_email.split('@')[0]
+    mous = MOU.objects.filter(
+        Q(mou_coordinator_email__iexact=org_email) |
+        Q(staff_coordinator_email__iexact=org_email) |
+        Q(organization_name__icontains=localpart)
+    ).prefetch_related('department', 'outcome')
+
+    return render(request, 'mou/org_mou_list.html', {'mous': mous, 'org_email': org_email})
 
 
 @login_required

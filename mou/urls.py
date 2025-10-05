@@ -21,6 +21,10 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('register/', views.register, name='register'),
     path('logout/', views.logout_view, name='logout'),
+    path('org/login/', views.org_login_request, name='org_login_request'),
+    path('org/verify/', views.org_login_verify, name='org_login_verify'),
+    path('org/logout/', views.org_logout, name='org_logout'),
+    path('org/mous/', views.org_mou_list, name='org_mou_list'),
     path('mou/<int:mou_id>/report/pdf/', views.mou_report_pdf, name='mou_report_pdf'),
     path('mou/<int:mou_id>/report/email/', views.send_mou_report_email, name='send_mou_report_email'),
 ]

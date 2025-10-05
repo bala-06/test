@@ -102,3 +102,15 @@ class LoginAttempt(models.Model):
 
     def __str__(self):
         return f"{self.username} - {'success' if self.success else 'failure'} @ {self.timestamp}"
+
+
+class OrgOTP(models.Model):
+    """One-time passcodes for organization email login."""
+    email = models.EmailField()
+    code = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"OTP for {self.email} ({'used' if self.used else 'active'})"

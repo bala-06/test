@@ -1,0 +1,25 @@
+{% extends 'mou/base.html' %}
+{% block content %}
+<div class="container">
+  <h2>Organization MOU List</h2>
+  <p>Logged in as: {{ org_email }}</p>
+  <table class="table">
+    <thead><tr><th>Title</th><th>Organization</th><th>Start</th><th>End</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for mou in mous %}
+      <tr>
+        <td>{{ mou.title }}</td>
+        <td>{{ mou.organization_name }}</td>
+        <td>{{ mou.start_date }}</td>
+        <td>{{ mou.end_date }}</td>
+        <td>
+          <a href="{% url 'view_mou' mou.id %}" class="btn btn-sm btn-outline-primary">View</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">No MOU records found for your organization.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
