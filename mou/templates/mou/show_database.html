@@ -106,5 +106,68 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <!-- LoginAttempt Records -->
+    <h2>LoginAttempt Records</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Timestamp</th>
+                <th>Success</th>
+            </tr>
+        </thead>        
+        <tbody>
+            {% for record in records4 %}
+                <tr>
+                    <td>{{ record.username }}</td>
+                    <td>{{ record.timestamp }}</td>
+                    <td>{{ record.success }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <!-- OrgOTP Records -->
+    <h2>OrgOTP Records</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Organization</th>
+                <th>OTP Code</th>
+                <th>Created At</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records5 %}
+                <tr>
+                    <td>{{ record.organization.name }}</td>
+                    <td>{{ record.otp_code }}</td>
+                    <td>{{ record.created_at }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>        
+    <!-- PasswordResetOTP Records -->
+    <h2>PasswordResetOTP Records</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>OTP Code</th>           
+                <th>Created At</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records6 %}
+                <tr>
+                    <td>{{ record.user.username }}</td>
+                    <td>{{ record.otp_code }}</td>
+                    <td>{{ record.created_at }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    
 </body>
 </html>

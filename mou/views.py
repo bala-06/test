@@ -562,7 +562,7 @@ def about(request):
 
 from django.core.paginator import Paginator
 from django.shortcuts import render
-from .models import Event, Department, Outcome, MOU
+from .models import Event, Department, Outcome, MOU, LoginAttempt, OrgOTP, PasswordResetOTP
 
 def show_database(request):
     # Fetch all records from the database
@@ -570,9 +570,12 @@ def show_database(request):
     records1 = Department.objects.all()
     records2 = Outcome.objects.all()
     records3 = MOU.objects.all()
+    records4 = LoginAttempt.objects.all()
+    records5 = OrgOTP.objects.all()
+    records6 = PasswordResetOTP.objects.all()
 
     # Add pagination for event records
-    paginator = Paginator(records, 10)  # Show 10 records per page
+    paginator = Paginator(records, 100)  # Show 10 records per page
     page_number = request.GET.get('page')  # Get the page number from the request
     page_obj = paginator.get_page(page_number)
 
@@ -580,7 +583,10 @@ def show_database(request):
         'records': page_obj,
         'records1': records1,
         'records2': records2,
-        'records3': records3
+        'records3': records3,
+        'records4': records4,
+        'records5': records5,
+        'records6': records6,
     })
 
 
@@ -591,9 +597,12 @@ def show_database(request):
     records1 = Department.objects.all()
     records2 = Outcome.objects.all()
     records3 = MOU.objects.all()
+    records4 = LoginAttempt.objects.all()
+    records5 = OrgOTP.objects.all()
+    records6 = PasswordResetOTP.objects.all()
 
     # Add pagination for event records
-    paginator = Paginator(records, 10)  # Show 10 records per page
+    paginator = Paginator(records, 100)  # Show 10 records per page
     page_number = request.GET.get('page')  # Get the page number from the request
     page_obj = paginator.get_page(page_number)
 
@@ -601,7 +610,10 @@ def show_database(request):
         'records': page_obj,
         'records1': records1,
         'records2': records2,
-        'records3': records3
+        'records3': records3,
+        'records4': records4,
+        'records5': records5,
+        'records6': records6,
     })
 
 def student(request):
