@@ -795,7 +795,7 @@ def org_login_verify(request):
 def org_logout(request):
     request.session.pop('org_email', None)
     messages.info(request, 'Organization user logged out.')
-    return redirect('mou_list')
+    return redirect('login')
 
 
 def org_mou_list(request):
@@ -972,7 +972,7 @@ def password_reset_verify(request):
 def logout_view(request):
     auth_logout(request)
     messages.info(request, 'You have been logged out.')
-    return redirect('mou_list')
+    return redirect('login')
 
 
 def register(request):
